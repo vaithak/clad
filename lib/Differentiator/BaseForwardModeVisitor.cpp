@@ -1926,15 +1926,14 @@ StmtDiff BaseForwardModeVisitor::VisitCXXStaticCastExpr(
 StmtDiff BaseForwardModeVisitor::VisitCXXFunctionalCastExpr(
     const clang::CXXFunctionalCastExpr* FCE) {
   StmtDiff castExprDiff = Visit(FCE->getSubExpr());
+  SourceLocation fakeLoc = utils::GetValidSLoc(m_Sema);
   Expr* clonedFCE = m_Sema
                         .BuildCXXFunctionalCastExpr(
-                            FCE->getTypeInfoAsWritten(), FCE->getType(), noLoc,
-                            castExprDiff.getExpr(), noLoc)
+                            FCE->getTypeInfoAsWritten(), FCE->getType(), fakeLoc, castExprDiff.getExpr(), fakeLoc)
                         .get();
   Expr* derivedFCE = m_Sema
                          .BuildCXXFunctionalCastExpr(
-                             FCE->getTypeInfoAsWritten(), FCE->getType(), noLoc,
-                             castExprDiff.getExpr_dx(), noLoc)
+                             FCE->getTypeInfoAsWritten(), FCE->getType(), fakeLoc, castExprDiff.getExpr_dx(), fakeLoc)
                          .get();
   return {clonedFCE, derivedFCE};
 }

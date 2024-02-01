@@ -227,6 +227,7 @@ DEFINE_CLONE_EXPR(VAArgExpr,
                    Node->getWrittenTypeInfo(), Node->getRParenLoc(),
                    CloneType(Node->getType()), Node->isMicrosoftABI()))
 DEFINE_CLONE_EXPR(ImplicitValueInitExpr, (CloneType(Node->getType())))
+DEFINE_CLONE_EXPR(CXXScalarValueInitExpr, (CloneType(Node->getType()), Node->getTypeSourceInfo(), Node->getRParenLoc()))
 DEFINE_CLONE_EXPR(ExtVectorElementExpr, (Node->getType(), Node->getValueKind(), Clone(Node->getBase()), Node->getAccessor(), Node->getAccessorLoc()))
 DEFINE_CLONE_EXPR(CXXBoolLiteralExpr, (Node->getValue(), Node->getType(), Node->getSourceRange().getBegin()))
 DEFINE_CLONE_EXPR(CXXNullPtrLiteralExpr, (Node->getType(), Node->getSourceRange().getBegin()))
@@ -429,6 +430,7 @@ DEFINE_CLONE_STMT(BreakStmt, (Node->getBreakLoc()))
 DEFINE_CLONE_STMT(CXXCatchStmt, (Node->getCatchLoc(),
                                  CloneDeclOrNull(Node->getExceptionDecl()),
                                  Clone(Node->getHandlerBlock())))
+DEFINE_CLONE_STMT(ValueStmt, (Node->getStmtClass()))
 
 Stmt* StmtClone::VisitCXXTryStmt(CXXTryStmt* Node) {
   llvm::SmallVector<Stmt*, 4> CatchStmts(std::max(1u, Node->getNumHandlers()));
