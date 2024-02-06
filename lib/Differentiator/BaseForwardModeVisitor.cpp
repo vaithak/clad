@@ -1929,11 +1929,13 @@ StmtDiff BaseForwardModeVisitor::VisitCXXFunctionalCastExpr(
   SourceLocation fakeLoc = utils::GetValidSLoc(m_Sema);
   Expr* clonedFCE = m_Sema
                         .BuildCXXFunctionalCastExpr(
-                            FCE->getTypeInfoAsWritten(), FCE->getType(), fakeLoc, castExprDiff.getExpr(), fakeLoc)
+                            FCE->getTypeInfoAsWritten(), FCE->getType(),
+                            fakeLoc, castExprDiff.getExpr(), fakeLoc)
                         .get();
   Expr* derivedFCE = m_Sema
                          .BuildCXXFunctionalCastExpr(
-                             FCE->getTypeInfoAsWritten(), FCE->getType(), fakeLoc, castExprDiff.getExpr_dx(), fakeLoc)
+                             FCE->getTypeInfoAsWritten(), FCE->getType(),
+                             fakeLoc, castExprDiff.getExpr_dx(), fakeLoc)
                          .get();
   return {clonedFCE, derivedFCE};
 }

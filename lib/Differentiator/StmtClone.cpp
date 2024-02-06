@@ -83,7 +83,7 @@ Stmt* StmtClone::VisitDeclRefExpr(DeclRefExpr *Node) {
       Ctx, Node->getQualifierLoc(), Node->getTemplateKeywordLoc(),
       Node->getDecl(), Node->refersToEnclosingVariableOrCapture(),
       Node->getNameInfo(), CloneType(Node->getType()), Node->getValueKind(),
-      Node->getFoundDecl(), &TAListInfo);
+      Node->getFoundDecl(), &TAListInfo, Node->isNonOdrUse());
 }
 DEFINE_CREATE_EXPR(IntegerLiteral,
                    (Ctx, Node->getValue(), CloneType(Node->getType()),
@@ -227,7 +227,9 @@ DEFINE_CLONE_EXPR(VAArgExpr,
                    Node->getWrittenTypeInfo(), Node->getRParenLoc(),
                    CloneType(Node->getType()), Node->isMicrosoftABI()))
 DEFINE_CLONE_EXPR(ImplicitValueInitExpr, (CloneType(Node->getType())))
-DEFINE_CLONE_EXPR(CXXScalarValueInitExpr, (CloneType(Node->getType()), Node->getTypeSourceInfo(), Node->getRParenLoc()))
+DEFINE_CLONE_EXPR(CXXScalarValueInitExpr,
+                  (CloneType(Node->getType()), Node->getTypeSourceInfo(),
+                   Node->getRParenLoc()))
 DEFINE_CLONE_EXPR(ExtVectorElementExpr, (Node->getType(), Node->getValueKind(), Clone(Node->getBase()), Node->getAccessor(), Node->getAccessorLoc()))
 DEFINE_CLONE_EXPR(CXXBoolLiteralExpr, (Node->getValue(), Node->getType(), Node->getSourceRange().getBegin()))
 DEFINE_CLONE_EXPR(CXXNullPtrLiteralExpr, (Node->getType(), Node->getSourceRange().getBegin()))
