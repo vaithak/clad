@@ -2,6 +2,7 @@
 #define CLAD_DIFF_PLANNER_H
 
 #include "clad/Differentiator/DiffMode.h"
+#include "clad/Differentiator/Graph.h"
 #include "clad/Differentiator/ParseDiffArgsTypes.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "llvm/ADT/SmallSet.h"
@@ -90,6 +91,49 @@ struct DiffRequest {
   ///   3) If no argument is provided, a default argument is used. The
   ///      function will be differentiated w.r.t. to its every parameter.
   void UpdateDiffParamsInfo(clang::Sema& semaRef);
+
+  /// Define the == operator for DiffRequest.
+  bool operator==(const DiffRequest& other) const {
+    // either function match or previous declaration match
+    return (Function == other.Function || 
+            Function->getPreviousDecl() == other.Function || 
+            Function == other.Function->getPreviousDecl()) &&
+           BaseFunctionName == other.BaseFunctionName &&
+           CurrentDerivativeOrder == other.CurrentDerivativeOrder &&
+           RequestedDerivativeOrder == other.RequestedDerivativeOrder &&
+           CallContext == other.CallContext &&
+           Args == other.Args &&
+           Mode == other.Mode &&
+           CallUpdateRequired == other.CallUpdateRequired &&
+           EnableTBRAnalysis == other.EnableTBRAnalysis &&
+           DVI == other.DVI &&
+           use_enzyme == other.use_enzyme &&
+           DerivedFDPrototype == other.DerivedFDPrototype &&
+           DeclarationOnly == other.DeclarationOnly;
+  }
+
+  // String operator for printing the node.
+  operator std::string() const {
+    std::string res = BaseFunctionName + "__order_" + std::to_string(CurrentDerivativeOrder) + "__mode_";
+    switch (Mode) {
+    case DiffMode::forward:
+      res += "forward";
+      break;
+    case DiffMode::reverse:
+      res += "reverse";
+      break;
+    case DiffMode::vector_forward_mode:
+      res += "vector_forward_mode";
+      break;
+    case DiffMode::experimental_pushforward:
+      res += "pushforward";
+      break;
+    case DiffMode::experimental_pullback:
+      res += "pullback";
+      break;
+    }
+    return res;
+  }
 };
 
   using DiffSchedule = llvm::SmallVector<DiffRequest, 16>;
@@ -110,22 +154,42 @@ struct DiffRequest {
     ///
     DiffSchedule& m_DiffPlans;
 
+    /// Graph to store the dependencies between different requests.
+    ///
+    clad::Graph<DiffRequest>& m_DiffRequestGraph;
+
     /// If set it means that we need to find the called functions and
     /// add them for implicit diff.
     ///
     const clang::FunctionDecl* m_TopMostFD = nullptr;
+
+    /// The parent request for the current request.
+    DiffRequest m_ParentRequest;
+
     clang::Sema& m_Sema;
 
     RequestOptions& m_Options;
 
   public:
     DiffCollector(clang::DeclGroupRef DGR, DiffInterval& Interval,
-                  DiffSchedule& plans, clang::Sema& S, RequestOptions& opts);
+                  DiffSchedule& plans, clad::Graph<DiffRequest>& requestGraph, clang::Sema& S, RequestOptions& opts);
     bool VisitCallExpr(clang::CallExpr* E);
 
   private:
     bool isInInterval(clang::SourceLocation Loc) const;
   };
 }
+
+// Define the hash function for DiffRequest.
+template<>
+struct std::hash<clad::DiffRequest> {
+  std::size_t operator()(const clad::DiffRequest& DR) const {
+    // Use the function pointer as the hash of the DiffRequest, it 
+    // is sufficient to break a reasonable number of collisions.
+    if (DR.Function->getPreviousDecl())
+      return std::hash<const void*>{}(DR.Function->getPreviousDecl());
+    return std::hash<const void*>{}(DR.Function);
+  }
+};
 
 #endif

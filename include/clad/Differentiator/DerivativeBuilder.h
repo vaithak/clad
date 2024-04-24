@@ -134,7 +134,9 @@ namespace clad {
     }
 
   public:
-    DerivativeBuilder(clang::Sema& S, plugin::CladPlugin& P);
+    /// Graph for the differentiation requests.
+    clad::Graph<DiffRequest>& m_DiffRequestGraph;
+    DerivativeBuilder(clang::Sema& S, plugin::CladPlugin& P, clad::Graph<DiffRequest>& DRG);
     ~DerivativeBuilder();
     /// Reset the model use for error estimation (if any).
     /// \param[in] estModel The error estimation model, can be either

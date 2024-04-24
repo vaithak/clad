@@ -128,6 +128,7 @@ namespace clad {
     CladTimerGroup m_CTG;
     DerivedFnCollector m_DFC;
     DiffSchedule m_DiffSchedule;
+    Graph<DiffRequest> m_DiffRequestGraph;
     enum class CallKind {
       HandleCXXStaticMemberVarInstantiation,
       HandleTopLevelDecl,
@@ -192,7 +193,6 @@ namespace clad {
       AppendDelayed({CallKind::HandleCXXStaticMemberVarInstantiation, D});
     }
     bool HandleTopLevelDecl(clang::DeclGroupRef D) override {
-      HandleTopLevelDeclForClad(D);
       AppendDelayed({CallKind::HandleTopLevelDecl, D});
       return true; // happyness, continue parsing
     }
@@ -266,6 +266,8 @@ namespace clad {
       m_DiffSchedule.push_back(request);
     }
 
+    clad::Graph<DiffRequest>& GetDiffRequestGraph() { return m_DiffRequestGraph; }
+
     // FIXME: We should hide ProcessDiffRequest when we implement proper
     // handling of the differentiation plans.
     clang::FunctionDecl* ProcessDiffRequest(DiffRequest& request);
@@ -275,6 +277,7 @@ namespace clad {
       assert(!m_HasMultiplexerProcessedDelayedCalls);
       m_DelayedCalls.push_back(DCI);
     }
+    void ProcessHandleTopLevelDeclCalls();
     void SendToMultiplexer();
     bool CheckBuiltins();
     void SetRequestOptions(RequestOptions& opts) const;

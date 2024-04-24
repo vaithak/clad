@@ -122,11 +122,11 @@ namespace clad {
       Sema& S = m_CI.getSema();
 
       if (!m_DerivativeBuilder)
-        m_DerivativeBuilder.reset(new DerivativeBuilder(S, *this));
+        m_DerivativeBuilder.reset(new DerivativeBuilder(S, *this, m_DiffRequestGraph));
 
       RequestOptions opts{};
       SetRequestOptions(opts);
-      DiffCollector collector(DGR, CladEnabledRange, m_DiffSchedule, S, opts);
+      DiffCollector collector(DGR, CladEnabledRange, m_DiffSchedule, m_DiffRequestGraph, S, opts);
     }
 
     FunctionDecl* CladPlugin::ProcessDiffRequest(DiffRequest& request) {
@@ -291,6 +291,13 @@ namespace clad {
       return nullptr;
     }
 
+    void CladPlugin::ProcessHandleTopLevelDeclCalls() {
+      for (auto DelayedCall : m_DelayedCalls) {
+        if (DelayedCall.m_Kind == CallKind::HandleTopLevelDecl)
+          HandleTopLevelDeclForClad(DelayedCall.m_DGR);
+      }
+    }
+
     void CladPlugin::SendToMultiplexer() {
       for (auto DelayedCall : m_DelayedCalls) {
         DeclGroupRef& D = DelayedCall.m_DGR;
@@ -390,6 +397,9 @@ namespace clad {
     }
 
     void CladPlugin::HandleTranslationUnit(ASTContext& C) {
+      // Collect the requested derivatives graph.
+      ProcessHandleTopLevelDeclCalls();
+
       Sema& S = m_CI.getSema();
       // Restore the TUScope that became a 0 in Sema::ActOnEndOfTranslationUnit.
       S.TUScope = m_StoredTUScope;
@@ -404,6 +414,11 @@ namespace clad {
         // when ProcessDiffRequest adds more requests to m_DiffSchedule.
         DiffRequest request = m_DiffSchedule[i];
         ProcessDiffRequest(request);
+      }
+      m_DiffRequestGraph.print();
+      std::vector<DiffRequest> nodes = m_DiffRequestGraph.topologicalSort(true/*reverseOrder*/);
+      for (auto& request : nodes) {
+        llvm :: outs () << (std::string)(request) << "\n";
       }
       // Put the TUScope in a consistent state after clad is done.
       S.TUScope = nullptr;

@@ -36,10 +36,10 @@ using namespace clang;
 
 namespace clad {
 
-  DerivativeBuilder::DerivativeBuilder(clang::Sema& S, plugin::CladPlugin& P)
+  DerivativeBuilder::DerivativeBuilder(clang::Sema& S, plugin::CladPlugin& P, clad::Graph<DiffRequest>& G)
     : m_Sema(S), m_CladPlugin(P), m_Context(S.getASTContext()),
       m_NodeCloner(new utils::StmtClone(m_Sema, m_Context)),
-      m_BuiltinDerivativesNSD(nullptr), m_NumericalDiffNSD(nullptr) {}
+      m_BuiltinDerivativesNSD(nullptr), m_NumericalDiffNSD(nullptr), m_DiffRequestGraph(G) {}
 
   DerivativeBuilder::~DerivativeBuilder() {}
 

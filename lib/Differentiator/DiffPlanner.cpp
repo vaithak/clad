@@ -232,9 +232,9 @@ namespace clad {
   }
 
   DiffCollector::DiffCollector(DeclGroupRef DGR, DiffInterval& Interval,
-                               DiffSchedule& plans, clang::Sema& S,
+                               DiffSchedule& plans, clad::Graph<DiffRequest>& requestGraph, clang::Sema& S,
                                RequestOptions& opts)
-      : m_Interval(Interval), m_DiffPlans(plans), m_TopMostFD(nullptr),
+      : m_Interval(Interval), m_DiffPlans(plans), m_DiffRequestGraph(requestGraph), m_TopMostFD(nullptr),
         m_Sema(S), m_Options(opts) {
 
     if (Interval.empty())
@@ -564,7 +564,7 @@ namespace clad {
     // In that case we should ask the enclosing ast nodes for a source
     // location and check if it is within range.
     SourceLocation endLoc = E->getEndLoc();
-    if (endLoc.isInvalid() || !isInInterval(endLoc))
+    if (endLoc.isInvalid()/* || !isInInterval(endLoc)*/)
         return true;
 
     FunctionDecl* FD = E->getDirectCallee();
@@ -671,6 +671,10 @@ namespace clad {
       request.VerboseDiags = true;
       request.Args = E->getArg(1);
       auto derivedFD = cast<FunctionDecl>(DRE->getDecl());
+      if (derivedFD->isDefined()) {
+        llvm :: outs () << "Function is defined, " << derivedFD->getNameAsString() << "\n";
+        derivedFD = derivedFD->getDefinition();
+      }
       request.Function = derivedFD;
       request.BaseFunctionName = utils::ComputeEffectiveFnName(request.Function);
 
@@ -682,14 +686,88 @@ namespace clad {
       assert(!m_TopMostFD &&
              "nested clad::differentiate/gradient are not yet supported");
       llvm::SaveAndRestore<const FunctionDecl*> saveTopMost = m_TopMostFD;
+      llvm::SaveAndRestore<DiffRequest> saveRequest = m_ParentRequest;
       m_TopMostFD = FD;
+      m_ParentRequest = request;
+      m_DiffRequestGraph.addNode(request, true /*isSource*/);
       TraverseDecl(derivedFD);
       m_DiffPlans.push_back(std::move(request));
     }
-    /*else if (m_TopMostFD) {
-      // If another function is called inside differentiated function,
-      // this will be handled by Forward/ReverseModeVisitor::Derive.
-    }*/
+    else if (m_TopMostFD) {
+      // Check if the function call is marked as non-differentiable.
+      if (clad::utils::hasNonDifferentiableAttribute(E))
+        return true;
+
+      // If the function has no args and is not a member function call then we
+      // assume that it is not related to independent variables and does not
+      // contribute to gradient.
+      if ((FD->getNumParams() == 0U) && !isa<CXXMemberCallExpr>(E) &&
+          !isa<CXXOperatorCallExpr>(E))
+        return true;
+
+      // Check if function call has all args evaluatable at compile time.
+      if (!isa<CXXMemberCallExpr>(E) && !isa<CXXOperatorCallExpr>(E)) {
+        bool allArgsAreConstantLiterals = true;
+        for (const Expr* arg : E->arguments()) {
+          // if it's of type MaterializeTemporaryExpr, then check its
+          // subexpression.
+          if (const auto* MTE = dyn_cast<MaterializeTemporaryExpr>(arg))
+            arg = clad_compat::GetSubExpr(MTE)->IgnoreImpCasts();
+          if (!arg->isEvaluatable(m_Sema.getASTContext())) {
+            allArgsAreConstantLiterals = false;
+            break;
+          }
+        }
+        if (allArgsAreConstantLiterals)
+          return true;
+      }
+
+      // Check if the function is a memory allocation or deallocation function.
+      // These either have pushforwards or special handling.
+      if (utils::IsMemoryFunction(FD) || utils::IsMemoryDeallocationFunction(FD))
+        return true;
+
+      // Means another function is called inside the differentiated function.
+      // We need to check if this function is a candidate for differentiation.
+      // If it is, we need to add a dependency between the parent request and
+      // this request.
+      DiffRequest request{};
+      switch (m_ParentRequest.Mode) {
+      case DiffMode::forward:
+      case DiffMode::experimental_pushforward:
+        request.Mode = DiffMode::experimental_pushforward;
+        request.Function = FD;
+        request.BaseFunctionName = clad::utils::ComputeEffectiveFnName(FD);
+        request.VerboseDiags = false;
+        break;
+      case DiffMode::reverse:
+      case DiffMode::experimental_pullback:
+        request.Mode = DiffMode::experimental_pullback;
+        request.Function = FD;
+        request.BaseFunctionName = clad::utils::ComputeEffectiveFnName(FD);
+        request.VerboseDiags = false;
+        request.EnableTBRAnalysis = m_ParentRequest.EnableTBRAnalysis;
+        break;
+      case DiffMode::vector_forward_mode:
+      case DiffMode::experimental_vector_pushforward:
+        request.Mode = DiffMode::experimental_vector_pushforward;
+        request.Function = FD;
+        request.BaseFunctionName = clad::utils::ComputeEffectiveFnName(FD);
+        request.VerboseDiags = false;
+        break;
+      }
+      if (!m_DiffRequestGraph.isConnected(m_ParentRequest, request)) {
+        m_DiffRequestGraph.addEdge(m_ParentRequest, request);
+        llvm::SaveAndRestore<DiffRequest> saveRequest = m_ParentRequest;
+        m_ParentRequest = request;
+        auto derivedFD = cast<FunctionDecl>(FD);
+        if (derivedFD->isDefined()) {
+          llvm :: outs () << "Function is defined, " << derivedFD->getNameAsString() << "\n";
+          derivedFD = derivedFD->getDefinition();
+        }
+        TraverseDecl(derivedFD);
+      }
+    }
     return true;     // return false to abort visiting.
   }
 } // end namespace
